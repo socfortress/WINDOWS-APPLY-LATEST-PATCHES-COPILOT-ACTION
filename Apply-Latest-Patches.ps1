@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $HostName = $env:COMPUTERNAME
 $LogMaxKB = 100
 $LogKeep = 5
+$runStart = Get-Date
 
 function Write-Log {
   param([string]$Message,[ValidateSet('INFO','WARN','ERROR','DEBUG')]$Level='INFO')
@@ -26,7 +27,8 @@ function Rotate-Log {
   if (Test-Path $LogPath -PathType Leaf) {
     if ((Get-Item $LogPath).Length/1KB -gt $LogMaxKB) {
       for ($i = $LogKeep - 1; $i -ge 0; $i--) {
-        $old = "$LogPath.$i"; $new = "$LogPath." + ($i + 1)
+        $old = "$LogPath.$i"
+        $new = "$LogPath." + ($i + 1)
         if (Test-Path $old) { Rename-Item $old $new -Force }
       }
       Rename-Item $LogPath "$LogPath.1" -Force
@@ -35,7 +37,17 @@ function Rotate-Log {
 }
 
 Rotate-Log
-$runStart = Get-Date
+
+try {
+  if (Test-Path $ARLog) {
+    Remove-Item -Path $ARLog -Force -ErrorAction Stop
+  }
+  New-Item -Path $ARLog -ItemType File -Force | Out-Null
+  Write-Log "Active response log cleared for fresh run."
+} catch {
+  Write-Log "Failed to clear ${ARLog}: $($_.Exception.Message)" 'WARN'
+}
+
 Write-Log "=== SCRIPT START : Check & Install Critical Windows Updates ==="
 
 try {
@@ -49,25 +61,25 @@ try {
   Write-Log "Checking for updates on $HostName..." 'INFO'
   $updates = Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -IgnoreReboot | Select-Object * | ForEach-Object {
     [PSCustomObject]@{
-      guid              = $_.UpdateID
-      title             = $_.Title
-      kb_article        = ($_.KB | Out-String).Trim()
-      categories        = ($_.Categories | Out-String).Trim()
-      severity          = $_.MsrcSeverity
-      download_sizeMB   = [math]::Round($_.Size / 1MB, 2)
-      is_downloaded     = $_.IsDownloaded
-      is_installed      = $_.IsInstalled
-      publication_date  = $_.LastDeploymentChangeTime
+      guid = $_.UpdateID
+      title = $_.Title
+      kb_article = ($_.KB | Out-String).Trim()
+      categories = ($_.Categories | Out-String).Trim()
+      severity = $_.MsrcSeverity
+      download_sizeMB = [math]::Round($_.Size / 1MB, 2)
+      is_downloaded = $_.IsDownloaded
+      is_installed = $_.IsInstalled
+      publication_date = $_.LastDeploymentChangeTime
     }
   }
 
   $checkObj = [pscustomobject]@{
-    timestamp    = (Get-Date).ToString('o')
-    host         = $HostName
-    action       = 'check_critical_updates'
+    timestamp = (Get-Date).ToString('o')
+    host = $HostName
+    action = 'check_critical_updates'
     update_count = $updates.Count
-    updates      = $updates
-    status       = 'success'
+    updates = $updates
+    status = 'success'
   }
   $checkObj | ConvertTo-Json -Depth 4 -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
   Write-Log "Found $($updates.Count) updates. Logged check phase." 'INFO'
@@ -76,35 +88,33 @@ try {
   $installResults = Get-WindowsUpdate -MicrosoftUpdate -AcceptAll -Install -IgnoreReboot -Verbose -ErrorAction Continue |
     ForEach-Object {
       [PSCustomObject]@{
-        title   = $_.Title
+        title = $_.Title
         kb_article = ($_.KB | Out-String).Trim()
-        result  = if ($_.IsInstalled) { 'Installed' } else { 'Failed' }
-        reboot  = $_.RebootRequired
+        result = if ($_.IsInstalled) { 'Installed' } else { 'Failed' }
+        reboot = $_.RebootRequired
       }
     }
 
   $finalObj = [pscustomobject]@{
     timestamp = (Get-Date).ToString('o')
-    host      = $HostName
-    action    = 'install_critical_updates'
+    host = $HostName
+    action = 'install_critical_updates'
     installed = $installResults
-    status    = 'completed'
+    status = 'completed'
   }
   $finalObj | ConvertTo-Json -Depth 4 -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
   Write-Log "Results JSON logged to $ARLog" 'INFO'
-
 } catch {
   Write-Log $_.Exception.Message 'ERROR'
   $errorObj = [pscustomobject]@{
     timestamp = (Get-Date).ToString('o')
-    host      = $HostName
-    action    = 'install_critical_updates'
-    status    = 'error'
-    error     = $_.Exception.Message
+    host = $HostName
+    action = 'install_critical_updates'
+    status = 'error'
+    error = $_.Exception.Message
   }
   $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
-}
-finally {
+} finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
   Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
