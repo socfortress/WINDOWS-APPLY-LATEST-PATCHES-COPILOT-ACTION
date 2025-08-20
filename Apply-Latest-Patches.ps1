@@ -101,7 +101,7 @@ try {
     action = 'install_critical_updates'
     installed = $installResults
     status = 'completed'
-    copilot_soar = $true
+    copilot_action = $true
   }
   $finalObj | ConvertTo-Json -Depth 4 -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
   Write-Log "Results JSON logged to $ARLog" 'INFO'
@@ -113,10 +113,11 @@ try {
     action = 'install_critical_updates'
     status = 'error'
     error = $_.Exception.Message
-    copilot_soar = $true
+    copilot_action = $true
   }
   $errorObj | ConvertTo-Json -Compress | Out-File -FilePath $ARLog -Append -Encoding ascii -Width 2000
 } finally {
   $dur = [int]((Get-Date) - $runStart).TotalSeconds
   Write-Log "=== SCRIPT END : duration ${dur}s ==="
 }
+
