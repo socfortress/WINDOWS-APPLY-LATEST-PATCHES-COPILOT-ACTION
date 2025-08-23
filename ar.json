@@ -1,5 +1,5 @@
 {
-  "copilot_action_name": "WINDOWS-APPLY-LATEST-PATCHES-ACTIVERESPONSE",
+  "copilot_action_name": "WINDOWS-APPLY-LATEST-PATCHES-COPILOT-ACTION",
   "description": "Checks for Microsoft/Windows updates using PSWindowsUpdate (installs the module if missing), logs available updates, then installs all available updates (AcceptAll, IgnoreReboot). Emits NDJSON (pre-install summary + per-update details + post-install results) and writes atomically to the Active Response log with .new fallback. Requires administrative privileges and internet access; a reboot may be required.",
   "technology": "Windows",
   "icon": "windows",
